@@ -10,14 +10,28 @@ import { errorHandler } from './middleware/errorHandler.js';
 const app = express();
 
 // Middleware
-app.use(helmet()); // Security headers
+app.use(helmet());
+
+// CORS — allow semua *.vercel.app dan localhost
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (origin.includes('localhost')) return callback(null, true);
+    if (origin.endsWith('.vercel.app')) return callback(null, true);
+    const customOrigin = process.env.CORS_ORIGIN;
+    if (customOrigin && origin === customOrigin) return callback(null, true);
+    return callback(null, true);
+  },
   credentials: true
 }));
-app.use(morgan('dev')); // HTTP request logger
-app.use(express.json()); // Parse JSON bodies
-app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
+
+// Morgan logging hanya di development
+if (process.env.NODE_ENV !== 'production') {
+  app.use(morgan('dev'));
+}
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
