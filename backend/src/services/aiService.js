@@ -264,7 +264,7 @@ const getRuleBasedResponse = (message, context = {}) => {
      Tambahkan: \`glfw3.lib;glew32.lib;opengl32.lib\`
 
 3. **Copy DLL ke folder project**
-   - Copy \`glew32.dll\` dari \`C:\\libs\\glew\\bin\\Release\\x64\\` ke folder executable
+   - Copy \`glew32.dll\` dari \`C:\\libs\\glew\\bin\\Release\\x64\` ke folder executable
 
 4. **Build & run project**`;
       } else {
@@ -281,7 +281,7 @@ g++ main.cpp -I C:/libs/glfw/include -I C:/libs/glew/include -L C:/libs/glfw/lib
    \`\`\`
 
 3. **Copy DLL ke folder project**
-   - Copy \`glew32.dll\` dari \`C:\\libs\\glew\\bin\\Release\\x64\\` ke folder executable
+   - Copy \`glew32.dll\` dari \`C:\\libs\\glew\\bin\\Release\\x64\` ke folder executable
 
 4. **Jalankan program**
    \`\`\`
