@@ -41,6 +41,8 @@ const RELEVANT_KEYWORDS = [
   // Cara / how-to (penting untuk pertanyaan "cara X")
   'cara', 'bagaimana', 'how', 'tanpa', 'without', 'alternatif', 'alternative',
   'manual', 'langkah', 'step', 'tutorial', 'panduan', 'guide',
+  // Pertanyaan "selain X", "pengganti X", "bisa tanpa X"
+  'selain', 'pengganti', 'bisa', 'pakai', 'gunakan', 'metode', 'method',
   // Verifikasi / cek
   'cek', 'check', 'verify', 'test', 'verifikasi',
   // Tambahan tools
@@ -104,11 +106,14 @@ Tugas kamu:
 - Jelaskan cara setup environment variables dan PATH
 - Bantu konfigurasi CMake dan build system
 - Berikan solusi step-by-step yang praktis dan jelas
-- Jawab pertanyaan tentang cara alternatif instalasi (tanpa vcpkg, tanpa package manager, cara manual, dll)
+- Jawab pertanyaan tentang cara alternatif instalasi — termasuk "tanpa vcpkg", "tanpa package manager", "cara manual", "selain vcpkg", dll. Ini TETAP topik instalasi library yang valid.
 - Jika user bertanya tentang alternatif dari tools yang ada di "Commands yang sudah ditampilkan", berikan alternatif konkret yang spesifik
 - Jawab dalam Bahasa Indonesia
 
-PENTING: Jika konteks menyebutkan commands yang sudah ditampilkan ke user (berisi vcpkg, apt, brew, dll), gunakan informasi itu untuk memberikan jawaban yang relevan dan spesifik — misalnya cara manual tanpa package manager tersebut.
+PENTING:
+- Pertanyaan seperti "bisa instalasi OpenGL tanpa vcpkg?", "cara manual install GLFW", "alternatif selain vcpkg" adalah TOPIK VALID — jawab dengan lengkap dan spesifik.
+- Jika konteks menyebutkan commands yang sudah ditampilkan ke user (berisi vcpkg, apt, brew, dll), gunakan informasi itu untuk memberikan jawaban relevan — misalnya cara manual tanpa package manager tersebut.
+- JANGAN tolak pertanyaan yang masih berkaitan dengan instalasi, setup, atau konfigurasi graphics library meskipun menggunakan kata "tanpa", "alternatif", "selain", "manual", atau "without".
 
 Format jawaban:
 - Gunakan numbering untuk langkah-langkah
@@ -116,7 +121,7 @@ Format jawaban:
 - Sertakan contoh command yang bisa langsung dipakai
 - Maksimal 400 kata agar tidak terlalu panjang
 
-Jika pertanyaan di luar topik instalasi library/graphics programming, tolak dengan sopan dan arahkan ke topik yang relevan.`;
+Tolak dengan sopan HANYA jika pertanyaan benar-benar tidak ada hubungannya dengan instalasi library, graphics programming, build system, atau C/C++ development (contoh: resep masakan, cuaca, berita politik).`;
 
 export const generateAIResponseWithGroq = async (message, context = {}) => {
   const { deviceSpecs, library, generatedCommands } = context;
@@ -227,6 +232,56 @@ export const generateAIResponse = async (message, context = {}) => {
 const getRuleBasedResponse = (message, context = {}) => {
   const lower = message.toLowerCase();
   const { deviceSpecs, library } = context;
+
+  // Deteksi pertanyaan "tanpa vcpkg" / "alternatif package manager"
+  if ((lower.includes('tanpa') || lower.includes('without') || lower.includes('alternatif') || lower.includes('selain')) &&
+      (lower.includes('vcpkg') || lower.includes('apt') || lower.includes('brew') || lower.includes('package'))) {
+    return {
+      message: `Ya, bisa banget install ${library?.name || 'library graphics'} **tanpa package manager**! 💪
+
+**Cara manual install OpenGL/GLFW/GLEW (Windows):**
+
+1. **Download library dari official site**
+   - GLFW: https://www.glfw.org/download.html
+   - GLEW: http://glew.sourceforge.net/
+   - Extract ke folder (contoh: \`C:/libs/glfw\`, \`C:/libs/glew\`)
+
+2. **Setup compiler include & lib paths**
+   ${deviceSpecs?.compiler?.toLowerCase().includes('msvc') || deviceSpecs?.compiler?.toLowerCase().includes('visual studio') ? `
+   Visual Studio:
+   - Project Properties → C/C++ → General → Additional Include Directories
+     Tambahkan: \`C:/libs/glfw/include;C:/libs/glew/include\`
+   - Linker → General → Additional Library Directories
+     Tambahkan: \`C:/libs/glfw/lib-vc2022;C:/libs/glew/lib/Release/x64\`
+   - Linker → Input → Additional Dependencies
+     Tambahkan: \`glfw3.lib;glew32.lib;opengl32.lib\`` : `
+   GCC/MinGW:
+   - Compile dengan flag:
+     \`g++ main.cpp -I C:/libs/glfw/include -I C:/libs/glew/include -L C:/libs/glfw/lib-mingw-w64 -L C:/libs/glew/lib/Release/x64 -lglfw3 -lglew32 -lopengl32 -lgdi32\``}
+
+3. **Copy DLL files ke project directory**
+   - Copy \`glew32.dll\` dari \`C:/libs/glew/bin/Release/x64\` ke folder executable Anda
+
+4. **Verify dengan simple program**
+   - Compile contoh code dari GLFW documentation
+
+**Linux/macOS manual:**
+- Download source, extract, lalu:
+  \`\`\`bash
+  cd glfw-3.x.x
+  cmake .
+  make
+  sudo make install
+  \`\`\`
+
+💡 **Kalau ribet**, vcpkg/apt/brew tetap lebih praktis karena otomatis handle semua ini 😊`,
+      suggestions: [
+        'Bagaimana setup PATH untuk DLL?',
+        'Error "cannot open file glfw3.lib"',
+        'Cara compile tanpa CMake',
+      ],
+    };
+  }
 
   if (lower.includes('error') || lower.includes('gagal') || lower.includes('failed')) {
     return {
@@ -344,7 +399,7 @@ Restart terminal setelah perubahan.`,
     message: `Halo! Saya siap membantu instalasi ${library?.name || 'library'}.
 
 Topik yang bisa saya bantu:
-- 📦 Instalasi & dependencies
+- 📦 Instalasi & dependencies (dengan/tanpa package manager)
 - ⚙️ Compile & build errors
 - 🔗 Linking issues
 - 🛣️ PATH & environment variables
