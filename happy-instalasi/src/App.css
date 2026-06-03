@@ -1,35 +1,76 @@
-/* Custom animations and utilities */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
+/* scanline overlay untuk terminal authenticity */
+.scanline-overlay {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 2px,
+    rgba(0,0,0,0.08) 2px,
+    rgba(0,0,0,0.08) 4px
+  );
+  z-index: 1;
+}
+
+/* Grid background untuk dashboard */
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(88,166,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(88,166,255,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Glow text */
+.text-glow-green {
+  color: #4af626;
+  text-shadow: 0 0 8px rgba(74,246,38,0.5);
+}
+.text-glow-blue {
+  color: #58a6ff;
+  text-shadow: 0 0 8px rgba(88,166,255,0.4);
+}
+.text-glow-red {
+  color: #f85149;
+  text-shadow: 0 0 8px rgba(248,81,73,0.4);
+}
+
+/* Highlight baris kode */
+.code-line { display: block; padding: 1px 0; }
+.code-line:hover { background: rgba(88,166,255,0.06); }
+
+/* Typing cursor */
+.typing-cursor::after {
+  content: '█';
+  animation: blink 1s step-end infinite;
+  color: #4af626;
+  margin-left: 2px;
+}
+
+/* Transisi copy success */
+.copy-success {
+  color: #4af626 !important;
+  border-color: #238636 !important;
+  box-shadow: 0 0 8px rgba(74,246,38,0.3) !important;
+}
+
+/* Panel resize handle (visual only) */
+.resize-handle {
+  width: 4px;
+  background: #21262d;
+  cursor: col-resize;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+.resize-handle:hover { background: #58a6ff; }
+
+/* Responsive split: stack on mobile */
+@media (max-width: 1024px) {
+  .split-layout {
+    flex-direction: column !important;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+  .split-left, .split-right {
+    width: 100% !important;
+    max-width: 100% !important;
   }
-}
-
-.animate-fadeIn {
-  animation: fadeIn 0.3s ease-out;
-}
-
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #555;
 }

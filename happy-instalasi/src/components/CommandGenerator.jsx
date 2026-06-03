@@ -2,281 +2,414 @@ import { useState, useEffect } from 'react';
 import { API_ENDPOINTS, apiRequest } from '../config/api';
 import { getSessionId } from '../config/session';
 
+/* ── Dot decorations mimicking terminal window chrome ── */
+const TerminalDots = () => (
+  <div className="flex items-center gap-1.5">
+    <span className="w-3 h-3 rounded-full" style={{ background: '#f85149' }} />
+    <span className="w-3 h-3 rounded-full" style={{ background: '#e3b341' }} />
+    <span className="w-3 h-3 rounded-full" style={{ background: '#4af626' }} />
+  </div>
+);
+
+/* ── Single command block ── */
+const CommandBlock = ({ cmd, index, copiedIndex, onCopy }) => {
+  const isCopied = copiedIndex === index;
+  return (
+    <div
+      className="rounded overflow-hidden transition-all duration-150"
+      style={{ border: '1px solid #21262d', background: '#0d1117' }}
+    >
+      {/* Command header */}
+      <div
+        className="flex items-center justify-between px-3 py-2"
+        style={{ background: '#161b22', borderBottom: '1px solid #21262d' }}
+      >
+        <div>
+          <span className="font-mono text-xs font-semibold" style={{ color: '#58a6ff' }}>
+            {cmd.title}
+          </span>
+          {cmd.description && (
+            <span className="ml-2 font-mono text-xs" style={{ color: '#484f58' }}>
+              // {cmd.description}
+            </span>
+          )}
+        </div>
+        <button
+          onClick={() => onCopy(cmd.command, index)}
+          className="font-mono text-xs px-2 py-1 rounded flex items-center gap-1 transition-all duration-200 flex-shrink-0"
+          style={
+            isCopied
+              ? { background: '#1f3a2b', border: '1px solid #238636', color: '#4af626' }
+              : { background: '#21262d', border: '1px solid #373e47', color: '#8b949e' }
+          }
+        >
+          {isCopied ? '✓ copied' : '⎘ copy'}
+        </button>
+      </div>
+
+      {/* Command body */}
+      <div className="px-4 py-3 font-mono text-sm overflow-x-auto" style={{ color: '#4af626' }}>
+        {cmd.command.split('\n').map((line, i) => (
+          <div key={i} className="code-line">
+            <span style={{ color: '#484f58', userSelect: 'none', marginRight: '12px' }}>
+              {String(i + 1).padStart(2, '0')}
+            </span>
+            {line}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/* ── Code preview panel ── */
+const CodePreview = ({ code, title = 'main.cpp', copiedKey, onCopy }) => (
+  <div className="panel h-full flex flex-col overflow-hidden">
+    <div
+      className="flex items-center justify-between px-4 py-2 flex-shrink-0"
+      style={{ background: '#21262d', borderBottom: '1px solid #2d333b' }}
+    >
+      <div className="flex items-center gap-3">
+        <TerminalDots />
+        <span className="font-mono text-xs" style={{ color: '#8b949e' }}>{title}</span>
+      </div>
+      <button
+        onClick={() => onCopy(code, 'code')}
+        className="font-mono text-xs px-2 py-1 rounded transition-all duration-200"
+        style={
+          copiedKey === 'code'
+            ? { background: '#1f3a2b', border: '1px solid #238636', color: '#4af626' }
+            : { background: '#0d1117', border: '1px solid #373e47', color: '#8b949e' }
+        }
+      >
+        {copiedKey === 'code' ? '✓ copied' : '⎘ copy'}
+      </button>
+    </div>
+    <div className="flex-1 overflow-y-auto p-4 font-mono text-xs leading-relaxed" style={{ background: '#010409', color: '#c9d1d9' }}>
+      {code.split('\n').map((line, i) => (
+        <div key={i} className="code-line flex">
+          <span className="select-none w-6 text-right flex-shrink-0 mr-4" style={{ color: '#484f58' }}>
+            {i + 1}
+          </span>
+          <span style={{ color: '#c9d1d9' }}>{line || '\u00A0'}</span>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+/* ── Main component ── */
 const CommandGenerator = ({ library, deviceSpecs, onCommandsGenerated }) => {
   const [commands, setCommands] = useState([]);
-  const [copiedIndex, setCopiedIndex] = useState(null);
   const [projectStructure, setProjectStructure] = useState('');
   const [pathSetup, setPathSetup] = useState([]);
   const [exampleCode, setExampleCode] = useState('');
-  const [cmakeFile, setCmakeFile] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [copiedIndex, setCopiedIndex] = useState(null);
+  const [activeSection, setActiveSection] = useState('commands');
 
   useEffect(() => {
-    if (library && deviceSpecs) {
-      fetchCommandsFromBackend();
-    }
+    if (library && deviceSpecs) fetchCommandsFromBackend();
   }, [library, deviceSpecs]);
 
   const fetchCommandsFromBackend = async () => {
     try {
       setLoading(true);
       setError(null);
-
       const response = await apiRequest(API_ENDPOINTS.generateCommands, {
         method: 'POST',
         body: JSON.stringify({
           libraryId: library.id,
           sessionId: getSessionId(),
           deviceSpecs: {
-            os: deviceSpecs.os,
-            osVersion: deviceSpecs.osVersion,
-            cpu: deviceSpecs.cpu,
-            gpu: deviceSpecs.gpu,
-            ram: deviceSpecs.ram,
-            compiler: deviceSpecs.compiler
-          }
-        })
+            os: deviceSpecs.os, osVersion: deviceSpecs.osVersion,
+            cpu: deviceSpecs.cpu, gpu: deviceSpecs.gpu,
+            ram: deviceSpecs.ram, compiler: deviceSpecs.compiler,
+          },
+        }),
       });
-
-      // Set data dari backend
       setCommands(response.data.commands);
       setProjectStructure(response.data.projectStructure);
       setPathSetup(response.data.pathSetup);
       setExampleCode(response.data.exampleCode);
-      setCmakeFile(response.data.cmakeFile);
-
-      // Kirim commands ke parent (App.jsx) agar AI Assistant bisa pakai sebagai context
-      if (onCommandsGenerated) {
-        onCommandsGenerated(response.data.commands);
-      }
+      if (onCommandsGenerated) onCommandsGenerated(response.data.commands);
     } catch (err) {
       setError(err.message || 'Failed to generate commands');
-      console.error('Error generating commands:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const copyToClipboard = (text, index) => {
+  const copyToClipboard = (text, key) => {
     navigator.clipboard.writeText(text);
-    setCopiedIndex(index);
+    setCopiedIndex(key);
     setTimeout(() => setCopiedIndex(null), 2000);
   };
 
-  // Loading state
-  if (loading) {
-    return (
-      <div className="card">
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-600"></div>
-          <span className="ml-3 text-gray-600">Generating commands...</span>
-        </div>
-      </div>
-    );
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <div className="card">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-start">
-            <svg className="w-6 h-6 text-red-600 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div>
-              <h3 className="text-red-800 font-semibold mb-1">❌ Error Generating Commands</h3>
-              <p className="text-red-700 text-sm">{error}</p>
-              <button 
-                onClick={fetchCommandsFromBackend}
-                className="mt-3 text-sm bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
-              >
-                Try Again
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  /* ── Empty state ── */
   if (!library || !deviceSpecs) {
     return (
-      <div className="card">
-        <div className="text-center text-gray-500 py-8">
-          <svg className="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          <p>Pilih library dan isi spesifikasi device untuk generate commands</p>
+      <div className="panel flex flex-col items-center justify-center py-20 gap-4">
+        <div className="font-mono text-4xl opacity-30">{'</>'}</div>
+        <div className="font-mono text-sm" style={{ color: '#484f58' }}>
+          Configure device & select library first
+        </div>
+        <div className="font-mono text-xs" style={{ color: '#373e47' }}>
+          // Use Setup tab to get started
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="space-y-6">
-      {/* Project Structure */}
-      <div className="card">
-        <div className="flex items-center space-x-2 mb-4">
-          <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-          </svg>
-          <h2 className="text-xl font-bold text-gray-800">📁 Struktur Project</h2>
+  /* ── Loading state ── */
+  if (loading) {
+    return (
+      <div className="panel">
+        <div className="panel-header">
+          <TerminalDots />
+          <span className="font-mono text-sm ml-2" style={{ color: '#8b949e' }}>generating...</span>
         </div>
-        <div className="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm overflow-x-auto whitespace-pre">
-          {projectStructure}
-        </div>
-        <div className="mt-3 text-sm text-gray-600">
-          💡 <strong>Tips:</strong> Buat folder sesuai struktur di atas untuk organize project dengan baik
-        </div>
-      </div>
-
-      {/* Path Setup Guide */}
-      {pathSetup.length > 0 && (
-        <div className="card">
-          <div className="flex items-center space-x-2 mb-4">
-            <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-            </svg>
-            <h2 className="text-xl font-bold text-gray-800">🛣️ Setup Path & Environment</h2>
-          </div>
-          <div className="space-y-4">
-            {pathSetup.map((section, idx) => (
-              <div key={idx} className="border border-gray-200 rounded-lg p-4">
-                <h3 className="font-semibold text-gray-800 mb-2">{section.title}</h3>
-                <div className="bg-blue-50 p-3 rounded text-sm space-y-1">
-                  {section.steps.map((step, stepIdx) => (
-                    <div key={stepIdx} className={step.startsWith('  ') ? 'ml-4 text-blue-700 font-mono text-xs' : 'text-blue-900'}>
-                      {step}
-                    </div>
-                  ))}
-                </div>
-              </div>
+        <div className="flex flex-col items-center justify-center py-16 gap-4">
+          <div className="flex gap-1.5">
+            {[0, 1, 2, 3].map(i => (
+              <div
+                key={i}
+                className="w-2 h-2 rounded-full animate-bounce"
+                style={{ background: '#4af626', animationDelay: `${i * 0.15}s` }}
+              />
             ))}
           </div>
-        </div>
-      )}
-
-      {/* Installation Commands */}
-      <div className="card">
-        <div className="flex items-center space-x-2 mb-4">
-          <svg className="w-6 h-6 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          <h2 className="text-xl font-bold text-gray-800">⚙️ Installation & Compile Commands</h2>
-        </div>
-
-        <div className="space-y-4">
-          {commands.map((cmd, index) => (
-            <div key={index} className="border border-gray-200 rounded-lg p-4 hover:border-sky-300 transition-colors">
-              <div className="flex justify-between items-start mb-2">
-                <div>
-                  <h3 className="font-semibold text-gray-800">{cmd.title}</h3>
-                  <p className="text-sm text-gray-600">{cmd.description}</p>
-                </div>
-                <button
-                  onClick={() => copyToClipboard(cmd.command, index)}
-                  className="btn-secondary text-sm py-1 px-3 flex-shrink-0"
-                >
-                  {copiedIndex === index ? '✓ Copied' : 'Copy'}
-                </button>
-              </div>
-              <div className="bg-gray-900 text-green-400 p-3 rounded font-mono text-sm overflow-x-auto whitespace-pre-wrap">
-                {cmd.command}
-              </div>
-            </div>
-          ))}
+          <div className="font-mono text-sm typing-cursor" style={{ color: '#4af626' }}>
+            Building configuration
+          </div>
+          <div className="font-mono text-xs" style={{ color: '#484f58' }}>
+            Analyzing {deviceSpecs.os} · {library.name}
+          </div>
         </div>
       </div>
+    );
+  }
 
-      {/* Example Code */}
-      <div className="card">
-        <div className="flex items-center space-x-2 mb-4">
-          <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-          </svg>
-          <h2 className="text-xl font-bold text-gray-800">📝 Example Code</h2>
+  /* ── Error state ── */
+  if (error) {
+    return (
+      <div className="panel">
+        <div className="panel-header">
+          <span className="status-dot red" />
+          <span className="font-mono text-sm" style={{ color: '#f85149' }}>error</span>
         </div>
-        <div className="mb-2">
-          <button
-            onClick={() => copyToClipboard(exampleCode, 'code')}
-            className="btn-secondary text-sm py-1 px-3"
+        <div className="p-6">
+          <div
+            className="rounded p-4 font-mono text-sm mb-4"
+            style={{ background: '#3b1219', border: '1px solid #da3633', color: '#f85149' }}
           >
-            {copiedIndex === 'code' ? '✓ Copied' : 'Copy Code'}
+            ✗ {error}
+          </div>
+          <button onClick={fetchCommandsFromBackend} className="btn-primary">
+            $ retry
           </button>
         </div>
-        <div className="bg-gray-900 text-gray-100 p-4 rounded-lg font-mono text-xs overflow-x-auto whitespace-pre">
-          {exampleCode}
+      </div>
+    );
+  }
+
+  /* ── Main split-screen layout ── */
+  const sections = [
+    { id: 'commands', label: 'install.sh' },
+    { id: 'path', label: 'path_setup' },
+    { id: 'structure', label: 'tree' },
+  ];
+
+  return (
+    <div className="flex flex-col gap-4 h-full animate-fadeInUp">
+
+      {/* ── TOP: Split screen — Commands (left) + Code Preview (right) ── */}
+      <div className="flex gap-4 split-layout" style={{ minHeight: '420px' }}>
+
+        {/* LEFT: Installation commands */}
+        <div className="panel flex flex-col overflow-hidden split-left" style={{ flex: '1 1 55%' }}>
+          {/* Terminal chrome */}
+          <div
+            className="flex items-center justify-between px-4 py-2 flex-shrink-0"
+            style={{ background: '#21262d', borderBottom: '1px solid #2d333b' }}
+          >
+            <div className="flex items-center gap-3">
+              <TerminalDots />
+              <div className="flex gap-1">
+                {sections.map(s => (
+                  <button
+                    key={s.id}
+                    onClick={() => setActiveSection(s.id)}
+                    className="font-mono text-xs px-3 py-1 rounded-t transition-colors duration-150"
+                    style={
+                      activeSection === s.id
+                        ? { background: '#0d1117', color: '#4af626', borderBottom: '2px solid #4af626' }
+                        : { background: 'transparent', color: '#484f58' }
+                    }
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="status-dot green" />
+              <span className="font-mono text-xs" style={{ color: '#484f58' }}>
+                {deviceSpecs.os} · {library.name}
+              </span>
+            </div>
+          </div>
+
+          {/* Content area */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+
+            {/* Commands tab */}
+            {activeSection === 'commands' && (
+              <>
+                {commands.length === 0 ? (
+                  <div className="font-mono text-sm text-center py-8" style={{ color: '#484f58' }}>
+                    No commands generated
+                  </div>
+                ) : (
+                  commands.map((cmd, i) => (
+                    <CommandBlock
+                      key={i} cmd={cmd} index={i}
+                      copiedIndex={copiedIndex} onCopy={copyToClipboard}
+                    />
+                  ))
+                )}
+              </>
+            )}
+
+            {/* Path setup tab */}
+            {activeSection === 'path' && (
+              <div className="space-y-3">
+                {pathSetup.length === 0 ? (
+                  <div className="font-mono text-sm text-center py-8" style={{ color: '#484f58' }}>
+                    No path setup info
+                  </div>
+                ) : (
+                  pathSetup.map((section, idx) => (
+                    <div key={idx} className="rounded overflow-hidden" style={{ border: '1px solid #21262d' }}>
+                      <div className="px-3 py-2" style={{ background: '#161b22', borderBottom: '1px solid #21262d' }}>
+                        <span className="font-mono text-xs font-semibold" style={{ color: '#e3b341' }}>
+                          📁 {section.title}
+                        </span>
+                      </div>
+                      <div className="p-3" style={{ background: '#0d1117' }}>
+                        {section.steps.map((step, si) => (
+                          <div key={si} className="font-mono text-xs leading-relaxed code-line"
+                            style={{ color: step.startsWith('  ') ? '#4af626' : '#8b949e', paddingLeft: step.startsWith('  ') ? '16px' : '0' }}
+                          >
+                            {step}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+            {/* Project structure tab */}
+            {activeSection === 'structure' && (
+              <div className="rounded overflow-hidden" style={{ border: '1px solid #21262d' }}>
+                <div
+                  className="flex items-center justify-between px-3 py-2"
+                  style={{ background: '#161b22', borderBottom: '1px solid #21262d' }}
+                >
+                  <span className="font-mono text-xs font-semibold" style={{ color: '#bc8cff' }}>
+                    project_structure/
+                  </span>
+                  <button
+                    onClick={() => copyToClipboard(projectStructure, 'struct')}
+                    className="font-mono text-xs px-2 py-0.5 rounded"
+                    style={
+                      copiedIndex === 'struct'
+                        ? { background: '#1f3a2b', border: '1px solid #238636', color: '#4af626' }
+                        : { background: '#0d1117', border: '1px solid #373e47', color: '#8b949e' }
+                    }
+                  >
+                    {copiedIndex === 'struct' ? '✓' : '⎘'}
+                  </button>
+                </div>
+                <pre
+                  className="p-4 font-mono text-xs overflow-x-auto leading-relaxed"
+                  style={{ background: '#010409', color: '#8b949e' }}
+                >
+                  {projectStructure}
+                </pre>
+              </div>
+            )}
+          </div>
         </div>
-        <div className="mt-3 text-sm text-gray-600">
-          💡 Save code ini sebagai <code className="bg-gray-100 px-2 py-1 rounded">src/main.cpp</code> di project folder
+
+        {/* RIGHT: Code preview */}
+        <div className="split-right" style={{ flex: '1 1 45%', minHeight: '360px' }}>
+          <CodePreview
+            code={exampleCode || '// No example code generated'}
+            title="src/main.cpp"
+            copiedKey={copiedIndex}
+            onCopy={copyToClipboard}
+          />
         </div>
       </div>
 
-      {/* CMakeLists.txt Example */}
+      {/* ── BOTTOM: CMakeLists.txt (Windows only) ── */}
       {deviceSpecs.os === 'windows' && (
-        <div className="card">
-          <div className="flex items-center space-x-2 mb-4">
-            <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <h2 className="text-xl font-bold text-gray-800">🔧 CMakeLists.txt (Recommended)</h2>
-          </div>
-          <div className="mb-2">
+        <div className="panel overflow-hidden">
+          <div
+            className="flex items-center justify-between px-4 py-2"
+            style={{ background: '#21262d', borderBottom: '1px solid #2d333b' }}
+          >
+            <div className="flex items-center gap-3">
+              <TerminalDots />
+              <span className="font-mono text-xs" style={{ color: '#bc8cff' }}>CMakeLists.txt</span>
+              <span className="font-mono text-xs" style={{ color: '#484f58' }}>// recommended build system</span>
+            </div>
             <button
-              onClick={() => copyToClipboard(`cmake_minimum_required(VERSION 3.10)
-project(OpenGLProject)
-
-set(CMAKE_CXX_STANDARD 11)
-
-# Find packages
-find_package(OpenGL REQUIRED)
-find_package(GLEW REQUIRED)
-find_package(glfw3 REQUIRED)
-
-# Add executable
-add_executable(app src/main.cpp)
-
-# Link libraries
-target_link_libraries(app 
-    OpenGL::GL 
-    GLEW::GLEW 
-    glfw
-)`, 'cmake')}
-              className="btn-secondary text-sm py-1 px-3"
+              onClick={() => copyToClipboard(CMAKE_CONTENT, 'cmake')}
+              className="font-mono text-xs px-2 py-1 rounded transition-all duration-200"
+              style={
+                copiedIndex === 'cmake'
+                  ? { background: '#1f3a2b', border: '1px solid #238636', color: '#4af626' }
+                  : { background: '#0d1117', border: '1px solid #373e47', color: '#8b949e' }
+              }
             >
-              {copiedIndex === 'cmake' ? '✓ Copied' : 'Copy CMakeLists.txt'}
+              {copiedIndex === 'cmake' ? '✓ copied' : '⎘ copy'}
             </button>
           </div>
-          <div className="bg-gray-900 text-gray-100 p-4 rounded-lg font-mono text-xs overflow-x-auto whitespace-pre">
-{`cmake_minimum_required(VERSION 3.10)
-project(OpenGLProject)
-
-set(CMAKE_CXX_STANDARD 11)
-
-# Find packages
-find_package(OpenGL REQUIRED)
-find_package(GLEW REQUIRED)
-find_package(glfw3 REQUIRED)
-
-# Add executable
-add_executable(app src/main.cpp)
-
-# Link libraries
-target_link_libraries(app 
-    OpenGL::GL 
-    GLEW::GLEW 
-    glfw
-)`}
-          </div>
-          <div className="mt-3 text-sm text-gray-600">
-            💡 CMake otomatis handle path detection, lebih mudah dari manual compile
-          </div>
+          <pre
+            className="p-4 font-mono text-xs overflow-x-auto leading-relaxed"
+            style={{ background: '#010409', color: '#c9d1d9' }}
+          >
+{CMAKE_CONTENT}
+          </pre>
         </div>
       )}
     </div>
   );
 };
+
+const CMAKE_CONTENT = `cmake_minimum_required(VERSION 3.10)
+project(OpenGLProject)
+
+set(CMAKE_CXX_STANDARD 11)
+
+# Find packages
+find_package(OpenGL REQUIRED)
+find_package(GLEW REQUIRED)
+find_package(glfw3 REQUIRED)
+
+# Add executable
+add_executable(app src/main.cpp)
+
+# Link libraries
+target_link_libraries(app
+    OpenGL::GL
+    GLEW::GLEW
+    glfw
+)`;
 
 export default CommandGenerator;

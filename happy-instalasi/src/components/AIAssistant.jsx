@@ -2,93 +2,80 @@
 import { API_ENDPOINTS, apiRequest } from '../config/api';
 import { getSessionId } from '../config/session';
 
-// Code Block - sama dengan CommandGenerator style
-const CodeBlock = ({ code, onCopy, isCopied }) => (
-  <div className="my-3 rounded-lg overflow-hidden border border-gray-200">
-    <div className="flex justify-between items-center bg-gray-800 px-4 py-2">
-      <span className="text-xs text-gray-400 font-mono">code</span>
-      <button onClick={onCopy} className="btn-secondary text-xs py-1 px-3">
-        {isCopied ? '✓ Copied' : 'Copy'}
-      </button>
-    </div>
-    <div className="bg-gray-900 text-green-400 p-4 font-mono text-sm overflow-x-auto whitespace-pre">
-      {code}
-    </div>
-  </div>
-);
-
-// Inline bold/code renderer
+/* ── Inline markdown renderer ── */
 const renderInline = (text) => {
   const parts = [];
   const re = /(`[^`]+`|\*\*[^*]+\*\*)/g;
-  let last = 0;
-  let m;
+  let last = 0, m;
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) parts.push(text.slice(last, m.index));
-    const token = m[0];
-    if (token.startsWith('`')) {
-      parts.push(
-        <code key={m.index} className="bg-gray-100 text-sky-700 px-1.5 py-0.5 rounded text-xs font-mono">
-          {token.slice(1, -1)}
-        </code>
-      );
-    } else {
-      parts.push(
-        <strong key={m.index} className="font-semibold text-gray-800">
-          {token.slice(2, -2)}
-        </strong>
-      );
-    }
+    const t = m[0];
+    if (t.startsWith('`'))
+      parts.push(<code key={m.index} className="font-mono text-xs px-1 rounded" style={{ background: '#21262d', color: '#58a6ff' }}>{t.slice(1, -1)}</code>);
+    else
+      parts.push(<strong key={m.index} style={{ color: '#c9d1d9' }}>{t.slice(2, -2)}</strong>);
     last = re.lastIndex;
   }
   if (last < text.length) parts.push(text.slice(last));
   return parts.length === 1 && typeof parts[0] === 'string' ? parts[0] : parts;
 };
 
-// Rich Text Renderer
+/* ── Code block in chat ── */
+const ChatCodeBlock = ({ code, onCopy, isCopied }) => (
+  <div className="my-2 rounded overflow-hidden" style={{ border: '1px solid #21262d' }}>
+    <div className="flex justify-between items-center px-3 py-1.5" style={{ background: '#21262d' }}>
+      <span className="font-mono text-xs" style={{ color: '#484f58' }}>code</span>
+      <button
+        onClick={onCopy}
+        className="font-mono text-xs px-2 py-0.5 rounded"
+        style={isCopied
+          ? { background: '#1f3a2b', color: '#4af626', border: '1px solid #238636' }
+          : { background: '#161b22', color: '#8b949e', border: '1px solid #373e47' }}
+      >
+        {isCopied ? '✓' : '⎘'}
+      </button>
+    </div>
+    <pre className="p-3 font-mono text-xs overflow-x-auto" style={{ background: '#010409', color: '#4af626' }}>{code}</pre>
+  </div>
+);
+
+/* ── Rich text renderer ── */
 const RichText = ({ text, copiedKey, onCopy }) => {
   if (!text) return null;
-  const codeBlockRe = /```(?:\w+)?\n?([\s\S]*?)```/g;
-  const segments = [];
-  let lastIndex = 0;
-  let match;
-  while ((match = codeBlockRe.exec(text)) !== null) {
-    if (match.index > lastIndex) segments.push({ type: 'text', content: text.slice(lastIndex, match.index) });
-    segments.push({ type: 'code', content: match[1].trim(), key: `code-${match.index}` });
-    lastIndex = codeBlockRe.lastIndex;
+  const codeRe = /```(?:\w+)?\n?([\s\S]*?)```/g;
+  const segs = [];
+  let last = 0, m;
+  while ((m = codeRe.exec(text)) !== null) {
+    if (m.index > last) segs.push({ type: 'text', content: text.slice(last, m.index) });
+    segs.push({ type: 'code', content: m[1].trim(), key: `c-${m.index}` });
+    last = codeRe.lastIndex;
   }
-  if (lastIndex < text.length) segments.push({ type: 'text', content: text.slice(lastIndex) });
+  if (last < text.length) segs.push({ type: 'text', content: text.slice(last) });
 
   return (
     <div className="space-y-1">
-      {segments.map((seg, i) => {
-        if (seg.type === 'code') {
-          return (
-            <CodeBlock key={i} code={seg.content} isCopied={copiedKey === seg.key} onCopy={() => onCopy(seg.content, seg.key)} />
-          );
-        }
-        const lines = seg.content.split('\n');
+      {segs.map((seg, i) => {
+        if (seg.type === 'code')
+          return <ChatCodeBlock key={i} code={seg.content} isCopied={copiedKey === seg.key} onCopy={() => onCopy(seg.content, seg.key)} />;
         return (
-          <div key={i} className="space-y-1">
-            {lines.map((line, li) => {
-              if (!line.trim()) return <div key={li} className="h-2" />;
-              const bulletMatch = line.match(/^[-*]\s+(.*)/);
-              if (bulletMatch) return (
-                <div key={li} className="flex items-start gap-2 text-sm text-gray-700">
-                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-sky-500 flex-shrink-0" />
-                  <span>{renderInline(bulletMatch[1])}</span>
+          <div key={i}>
+            {seg.content.split('\n').map((line, li) => {
+              if (!line.trim()) return <div key={li} className="h-1.5" />;
+              const bullet = line.match(/^[-*]\s+(.*)/);
+              if (bullet) return (
+                <div key={li} className="flex items-start gap-2 font-mono text-xs leading-relaxed" style={{ color: '#8b949e' }}>
+                  <span style={{ color: '#4af626', marginTop: '3px' }}>›</span>
+                  <span>{renderInline(bullet[1])}</span>
                 </div>
               );
-              const numMatch = line.match(/^(\d+)\.\s+(.*)/);
-              if (numMatch) return (
-                <div key={li} className="flex items-start gap-2 text-sm text-gray-700">
-                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-sky-100 text-sky-700 text-xs flex items-center justify-center font-semibold">{numMatch[1]}</span>
-                  <span>{renderInline(numMatch[2])}</span>
+              const num = line.match(/^(\d+)\.\s+(.*)/);
+              if (num) return (
+                <div key={li} className="flex items-start gap-2 font-mono text-xs leading-relaxed">
+                  <span className="w-4 h-4 rounded-full text-center text-xs flex-shrink-0 font-bold" style={{ background: '#1f3a2b', color: '#4af626', lineHeight: '16px' }}>{num[1]}</span>
+                  <span style={{ color: '#c9d1d9' }}>{renderInline(num[2])}</span>
                 </div>
               );
-              if (line.startsWith('## ')) return <p key={li} className="text-sm font-bold text-gray-800 mt-2">{line.slice(3)}</p>;
-              if (line.startsWith('# ')) return <p key={li} className="text-base font-bold text-gray-800 mt-2">{line.slice(2)}</p>;
-              return <p key={li} className="text-sm text-gray-700 leading-relaxed">{renderInline(line)}</p>;
+              return <p key={li} className="font-mono text-xs leading-relaxed" style={{ color: '#c9d1d9' }}>{renderInline(line)}</p>;
             })}
           </div>
         );
@@ -97,7 +84,7 @@ const RichText = ({ text, copiedKey, onCopy }) => {
   );
 };
 
-// Message Bubble
+/* ── Message bubble ── */
 const MessageBubble = ({ msg, onSuggestionClick }) => {
   const [expanded, setExpanded] = useState(false);
   const [copiedKey, setCopiedKey] = useState(null);
@@ -108,75 +95,59 @@ const MessageBubble = ({ msg, onSuggestionClick }) => {
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  const isLong = (msg.content || '').length > 500 || (msg.content || '').includes('```');
+  const isLong = (msg.content || '').length > 400;
 
-  // User bubble
-  if (msg.role === 'user') {
-    return (
-      <div className="flex justify-end">
-        <div className="max-w-[80%] bg-sky-600 text-white px-4 py-3 rounded-2xl rounded-tr-sm shadow-sm">
-          <p className="text-sm whitespace-pre-line leading-relaxed">{msg.content}</p>
-        </div>
+  if (msg.role === 'user') return (
+    <div className="flex justify-end">
+      <div className="max-w-[80%] px-3 py-2 rounded-lg rounded-tr-none font-mono text-xs"
+        style={{ background: '#1f3a2b', border: '1px solid #238636', color: '#c9d1d9' }}>
+        {msg.content}
       </div>
-    );
-  }
+    </div>
+  );
 
-  // Off-topic assistant bubble - pakai card style sama dengan CommandGenerator warning section
-  if (msg.offTopic) {
-    return (
-      <div className="flex flex-col items-start max-w-[90%] w-full">
-        <div className="w-full border border-amber-200 rounded-lg p-4 bg-amber-50">
-          <div className="flex items-center space-x-2 mb-3">
-            <svg className="w-5 h-5 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-            </svg>
-            <span className="text-sm font-semibold text-amber-700">Di luar topik instalasi library</span>
-          </div>
-          <div className={isLong && !expanded ? 'max-h-32 overflow-hidden relative' : ''}>
-            <RichText text={msg.content} copiedKey={copiedKey} onCopy={handleCopy} />
-            {isLong && !expanded && (
-              <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-amber-50 to-transparent" />
-            )}
-          </div>
-          {isLong && (
-            <button onClick={() => setExpanded(x => !x)} className="mt-2 text-xs text-amber-600 underline">
-              {expanded ? 'Tampilkan lebih sedikit' : 'Tampilkan lebih banyak'}
-            </button>
-          )}
+  if (msg.offTopic) return (
+    <div className="flex flex-col gap-2">
+      <div className="rounded p-3" style={{ background: '#2d2007', border: '1px solid #9e6a03' }}>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="status-dot yellow" />
+          <span className="font-mono text-xs font-semibold" style={{ color: '#e3b341' }}>off-topic</span>
         </div>
-        {msg.suggestions?.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-2">
-            {msg.suggestions.map((s, i) => (
-              <button key={i} onClick={() => onSuggestionClick(s)} className="text-xs bg-white border border-sky-200 text-sky-700 px-3 py-1 rounded-full hover:bg-sky-50 transition-colors">
-                {s}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // Normal assistant bubble - pakai card style sama dengan CommandGenerator section
-  return (
-    <div className="flex flex-col items-start max-w-[90%] w-full">
-      <div className="w-full border border-gray-200 rounded-lg p-4 bg-white hover:border-sky-300 transition-colors">
-        <div className={isLong && !expanded ? 'max-h-40 overflow-hidden relative' : ''}>
+        <div className={isLong && !expanded ? 'max-h-24 overflow-hidden relative' : ''}>
           <RichText text={msg.content} copiedKey={copiedKey} onCopy={handleCopy} />
-          {isLong && !expanded && (
-            <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white to-transparent" />
-          )}
+          {isLong && !expanded && <div className="absolute bottom-0 left-0 right-0 h-6" style={{ background: 'linear-gradient(transparent, #2d2007)' }} />}
         </div>
-        {isLong && (
-          <button onClick={() => setExpanded(x => !x)} className="mt-2 text-xs text-sky-600 underline">
-            {expanded ? 'Tampilkan lebih sedikit' : 'Tampilkan lebih banyak'}
-          </button>
-        )}
+        {isLong && <button onClick={() => setExpanded(x => !x)} className="mt-1 font-mono text-xs" style={{ color: '#e3b341' }}>{expanded ? '▲ less' : '▼ more'}</button>}
       </div>
       {msg.suggestions?.length > 0 && (
-        <div className="flex flex-wrap gap-2 mt-2">
+        <div className="flex flex-wrap gap-1.5">
           {msg.suggestions.map((s, i) => (
-            <button key={i} onClick={() => onSuggestionClick(s)} className="text-xs bg-white border border-sky-200 text-sky-700 px-3 py-1 rounded-full hover:bg-sky-50 transition-colors">
+            <button key={i} onClick={() => onSuggestionClick(s)}
+              className="font-mono text-xs px-2 py-1 rounded transition-colors"
+              style={{ background: '#161b22', border: '1px solid #373e47', color: '#58a6ff' }}>
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="rounded p-3" style={{ background: '#161b22', border: '1px solid #21262d' }}>
+        <div className={isLong && !expanded ? 'max-h-40 overflow-hidden relative' : ''}>
+          <RichText text={msg.content} copiedKey={copiedKey} onCopy={handleCopy} />
+          {isLong && !expanded && <div className="absolute bottom-0 left-0 right-0 h-8" style={{ background: 'linear-gradient(transparent, #161b22)' }} />}
+        </div>
+        {isLong && <button onClick={() => setExpanded(x => !x)} className="mt-1 font-mono text-xs" style={{ color: '#58a6ff' }}>{expanded ? '▲ less' : '▼ more'}</button>}
+      </div>
+      {msg.suggestions?.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {msg.suggestions.map((s, i) => (
+            <button key={i} onClick={() => onSuggestionClick(s)}
+              className="font-mono text-xs px-2 py-1 rounded transition-colors"
+              style={{ background: '#161b22', border: '1px solid #373e47', color: '#58a6ff' }}>
               {s}
             </button>
           ))}
@@ -186,158 +157,185 @@ const MessageBubble = ({ msg, onSuggestionClick }) => {
   );
 };
 
-// Main Component
-const AIAssistant = ({ deviceSpecs, library, generatedCommands }) => {
-  const CHAT_KEY = 'hi_chatHistory';
+/* ── Main AIAssistant — renders as floating overlay ── */
+const CHAT_KEY = 'hi_chatHistory';
+const INIT_MSG = {
+  role: 'assistant',
+  content: 'AI Montir online. Paste error log atau describe masalah kompilasi kamu.',
+  offTopic: false,
+  suggestions: ['Cara install OpenGL?', 'Error saat compile', 'Setup PATH variables', 'CMake tidak find library'],
+};
 
+const AIAssistant = ({ deviceSpecs, library, generatedCommands }) => {
   const loadChat = () => {
-    try {
-      const val = localStorage.getItem(CHAT_KEY);
-      return val ? JSON.parse(val) : [{
-        role: 'assistant',
-        content: 'Halo! Saya AI Assistant untuk membantu troubleshooting instalasi graphics library. Silakan tanyakan masalah yang Anda hadapi.',
-        offTopic: false,
-        suggestions: [],
-      }];
-    } catch {
-      return [{
-        role: 'assistant',
-        content: 'Halo! Saya AI Assistant untuk membantu troubleshooting instalasi graphics library. Silakan tanyakan masalah yang Anda hadapi.',
-        offTopic: false,
-        suggestions: [],
-      }];
-    }
+    try { const v = localStorage.getItem(CHAT_KEY); return v ? JSON.parse(v) : [INIT_MSG]; } catch { return [INIT_MSG]; }
   };
 
+  const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState(loadChat);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const bottomRef = useRef(null);
+  const inputRef = useRef(null);
 
-  // Simpan chat ke localStorage setiap kali messages berubah
   useEffect(() => {
-    try {
-      // Batasi simpan maks 50 pesan terakhir agar tidak overload storage
-      const toSave = messages.slice(-50);
-      localStorage.setItem(CHAT_KEY, JSON.stringify(toSave));
-    } catch {}
+    try { localStorage.setItem(CHAT_KEY, JSON.stringify(messages.slice(-50))); } catch {}
   }, [messages]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isLoading]);
+    if (open) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [open, messages]);
 
   const handleSend = async () => {
     if (!input.trim()) return;
-    const userMessage = { role: 'user', content: input };
-    setMessages(prev => [...prev, userMessage]);
-    const currentInput = input;
+    const userMsg = { role: 'user', content: input };
+    setMessages(prev => [...prev, userMsg]);
+    const cur = input;
     setInput('');
     setIsLoading(true);
     try {
-      const response = await apiRequest(API_ENDPOINTS.aiChat, {
+      const res = await apiRequest(API_ENDPOINTS.aiChat, {
         method: 'POST',
         body: JSON.stringify({
-          message: currentInput,
+          message: cur,
           sessionId: getSessionId(),
-          context: { deviceSpecs, library, generatedCommands }
-        })
+          context: { deviceSpecs, library, generatedCommands },
+        }),
       });
-      const aiContent = response?.data?.aiResponse ?? response?.aiResponse ?? 'Tidak ada respons dari AI.';
-      const suggestions = response?.data?.suggestions ?? response?.suggestions ?? [];
-      const offTopic = response?.data?.offTopic ?? response?.offTopic ?? false;
+      const aiContent = res?.data?.aiResponse ?? res?.aiResponse ?? 'No response.';
+      const suggestions = res?.data?.suggestions ?? res?.suggestions ?? [];
+      const offTopic = res?.data?.offTopic ?? res?.offTopic ?? false;
       setMessages(prev => [...prev, { role: 'assistant', content: aiContent, suggestions, offTopic }]);
-    } catch (error) {
+    } catch (err) {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: `**Error:** ${error.message}\n\nPastikan backend server sudah running di \`http://localhost:5000\``,
-        offTopic: false,
-        suggestions: [],
+        content: `**Error:** ${err.message}`,
+        offTopic: false, suggestions: [],
       }]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
+  const handleKey = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } };
+  const clearChat = () => {
+    setMessages([INIT_MSG]);
+    try { localStorage.removeItem(CHAT_KEY); } catch {}
   };
 
   return (
-    <div className="card">
-      {/* Header - sama dengan CommandGenerator section header */}
-      <div className="flex items-center space-x-2 mb-4">
-        <svg className="w-6 h-6 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-        </svg>
-        <h2 className="text-xl font-bold text-gray-800">🤖 AI Troubleshooting Assistant</h2>
-        <div className="ml-auto flex items-center gap-2">
-          <span className="text-xs bg-sky-100 text-sky-700 px-2 py-1 rounded-full">
-            🎯 Fokus: Instalasi Library
-          </span>
-          <button
-            onClick={() => {
-              const init = [{
-                role: 'assistant',
-                content: 'Halo! Saya AI Assistant untuk membantu troubleshooting instalasi graphics library. Silakan tanyakan masalah yang Anda hadapi.',
-                offTopic: false,
-                suggestions: [],
-              }];
-              setMessages(init);
-              try { localStorage.removeItem('hi_chatHistory'); } catch {}
-            }}
-            className="text-xs text-gray-400 hover:text-red-500 transition-colors px-2 py-1 rounded border border-gray-200 hover:border-red-300"
-            title="Hapus riwayat chat"
+    <>
+      {/* ── Floating Action Button ── */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="fab-ai"
+        title="AI Montir Log — Konsultasi error kompilasi"
+      >
+        <span className="text-base">🔧</span>
+        <span className="hidden sm:inline">AI Montir</span>
+        {open
+          ? <span style={{ color: '#8b949e' }}>✕</span>
+          : <span style={{ color: '#484f58', fontSize: '10px' }}>↗</span>
+        }
+      </button>
+
+      {/* ── Overlay panel ── */}
+      {open && (
+        <div className="ai-overlay animate-fadeInUp">
+          {/* Header */}
+          <div
+            className="flex items-center justify-between px-4 py-3 flex-shrink-0"
+            style={{ background: '#21262d', borderBottom: '1px solid #2d333b' }}
           >
-            🗑️ Hapus Chat
-          </button>
-        </div>
-      </div>
-
-      {/* Chat area */}
-      <div className="bg-gray-50 rounded-lg p-4 h-96 overflow-y-auto mb-4 space-y-3">
-        {messages.map((msg, index) => (
-          <MessageBubble key={index} msg={msg} onSuggestionClick={(s) => setInput(s)} />
-        ))}
-
-        {/* Loading - sama dengan CommandGenerator loading style */}
-        {isLoading && (
-          <div className="flex items-start max-w-[90%]">
-            <div className="border border-gray-200 rounded-lg p-4 bg-white">
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-sky-400 rounded-full animate-bounce" />
-                <div className="w-2 h-2 bg-sky-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-                <div className="w-2 h-2 bg-sky-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }} />
-                <span className="text-xs text-gray-500 ml-1">AI sedang memproses...</span>
-              </div>
+            <div className="flex items-center gap-2">
+              <span className="status-dot green glow-pulse" />
+              <span className="font-mono text-sm font-semibold" style={{ color: '#4af626' }}>AI Montir Log</span>
+              <span className="font-mono text-xs" style={{ color: '#484f58' }}>// troubleshooter</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={clearChat} className="font-mono text-xs" style={{ color: '#484f58' }} title="Clear chat">
+                ⌫ clear
+              </button>
+              <button onClick={() => setOpen(false)} className="font-mono text-xs w-6 h-6 rounded flex items-center justify-center transition-colors"
+                style={{ background: '#161b22', color: '#8b949e', border: '1px solid #373e47' }}>
+                ✕
+              </button>
             </div>
           </div>
-        )}
-        <div ref={bottomRef} />
-      </div>
 
-      {/* Input area */}
-      <div className="flex space-x-2">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Tanyakan masalah instalasi Anda..."
-          className="input-field flex-1"
-        />
-        <button onClick={handleSend} disabled={isLoading || !input.trim()} className="btn-primary px-6">
-          Kirim
-        </button>
-      </div>
+          {/* Context badge */}
+          {(deviceSpecs || library) && (
+            <div className="px-3 py-1.5 flex items-center gap-2 flex-wrap" style={{ background: '#0d1117', borderBottom: '1px solid #21262d' }}>
+              {deviceSpecs && (
+                <span className="font-mono text-xs" style={{ color: '#484f58' }}>
+                  <span style={{ color: '#58a6ff' }}>{deviceSpecs.os}</span>
+                  {deviceSpecs.compiler && <> · <span style={{ color: '#8b949e' }}>{deviceSpecs.compiler}</span></>}
+                </span>
+              )}
+              {library && (
+                <span className="font-mono text-xs px-1.5 py-0.5 rounded" style={{ background: '#1f3a2b', border: '1px solid #238636', color: '#4af626' }}>
+                  {library.name}
+                </span>
+              )}
+            </div>
+          )}
 
-      <div className="mt-3 text-xs text-gray-500 text-center">
-        💡 Tip: Jelaskan error message atau masalah secara detail untuk solusi yang lebih akurat
-      </div>
-    </div>
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-3" style={{ background: '#0d1117' }}>
+            {messages.map((msg, i) => (
+              <MessageBubble key={i} msg={msg} onSuggestionClick={(s) => setInput(s)} />
+            ))}
+            {isLoading && (
+              <div className="flex gap-1.5 items-center px-3 py-2 rounded" style={{ background: '#161b22' }}>
+                {[0, 1, 2].map(i => (
+                  <div key={i} className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: '#4af626', animationDelay: `${i * 0.15}s` }} />
+                ))}
+                <span className="font-mono text-xs ml-1" style={{ color: '#484f58' }}>analyzing...</span>
+              </div>
+            )}
+            <div ref={bottomRef} />
+          </div>
+
+          {/* Input */}
+          <div className="flex-shrink-0 p-3" style={{ borderTop: '1px solid #21262d', background: '#161b22' }}>
+            <div className="flex gap-2">
+              <input
+                ref={inputRef}
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={handleKey}
+                placeholder="Paste error log atau describe masalah..."
+                className="flex-1 px-3 py-2 rounded font-mono text-xs outline-none"
+                style={{
+                  background: '#0d1117', border: '1px solid #373e47', color: '#c9d1d9',
+                }}
+                onFocus={e => { e.target.style.borderColor = '#238636'; e.target.style.boxShadow = '0 0 0 2px rgba(74,246,38,0.1)'; }}
+                onBlur={e => { e.target.style.borderColor = '#373e47'; e.target.style.boxShadow = 'none'; }}
+              />
+              <button
+                onClick={handleSend}
+                disabled={isLoading || !input.trim()}
+                className="font-mono text-xs px-3 py-2 rounded transition-all duration-200 flex-shrink-0"
+                style={{
+                  background: isLoading || !input.trim() ? '#21262d' : '#238636',
+                  border: '1px solid',
+                  borderColor: isLoading || !input.trim() ? '#373e47' : '#2ea043',
+                  color: isLoading || !input.trim() ? '#484f58' : '#fff',
+                }}
+              >
+                send
+              </button>
+            </div>
+            <div className="mt-1.5 font-mono text-xs text-center" style={{ color: '#373e47' }}>
+              // Enter to send · Shift+Enter new line
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
