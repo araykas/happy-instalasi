@@ -112,6 +112,12 @@ npm run dev        # http://localhost:5000
 
 > Dark terminal-style dashboard, split-screen command generator, floating AI troubleshooter
 
+<img width="1909" height="879" alt="image" src="https://github.com/user-attachments/assets/a38ddfb3-9362-483e-8ea0-69a45d17ff8d" />
+<img width="1912" height="876" alt="image" src="https://github.com/user-attachments/assets/0601012b-9143-4f13-bdb7-d15ef9c509b3" />
+<img width="626" height="701" alt="image" src="https://github.com/user-attachments/assets/a1f34f1d-b9f9-42cd-9829-92047559ee63" />
+
+
+
 ---
 
 ## License
