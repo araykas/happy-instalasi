@@ -1,5 +1,6 @@
 // Vercel Serverless Entry Point
-// Semua backend Express dijalankan dari sini
+// Route Express pakai path TANPA /api prefix
+// karena Vercel sudah strip /api saat masuk ke function ini
 
 import express from 'express';
 import cors from 'cors';
@@ -239,23 +240,37 @@ const validate = (req, res) => {
 };
 
 // ══════════════════════════════════════════════════════
-// ROUTES
+// ROUTES — path tanpa /api prefix
+// Vercel menerima request di /api/* dan meneruskan ke sini
+// dengan full URL path, jadi tetap pakai /api/* di Express
 // ══════════════════════════════════════════════════════
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', message: 'Happy Instalasi Backend is running', timestamp: new Date().toISOString(), groq: !!groq, supabase: isSupabaseConfigured() });
+// Health check — support kedua path
+app.get(['/health', '/api/health'], (req, res) => {
+  res.json({
+    status: 'OK',
+    message: 'Happy Instalasi Backend is running',
+    timestamp: new Date().toISOString(),
+    groq: !!groq,
+    supabase: isSupabaseConfigured(),
+  });
 });
 
 // ── Libraries ──
-app.get('/api/libraries', async (req, res) => {
+app.get(['/libraries', '/api/libraries'], async (req, res) => {
   try {
     let libraries = LIBRARIES_STATIC;
     let source = 'static';
     if (isSupabaseConfigured()) {
       const { data, error } = await supabase.from('libraries').select('*').order('name');
       if (!error && data) {
-        libraries = data.map(r => ({ id: r.id, name: r.name, description: r.description, category: r.category, version: r.version, icon: r.icon, difficulty: r.difficulty, platforms: r.platforms || [], dependencies: r.dependencies || [], documentation: r.documentation, features: r.features || [], comingSoon: r.coming_soon }));
+        libraries = data.map(r => ({
+          id: r.id, name: r.name, description: r.description,
+          category: r.category, version: r.version, icon: r.icon,
+          difficulty: r.difficulty, platforms: r.platforms || [],
+          dependencies: r.dependencies || [], documentation: r.documentation,
+          features: r.features || [], comingSoon: r.coming_soon,
+        }));
         source = 'database';
       }
     }
@@ -265,13 +280,18 @@ app.get('/api/libraries', async (req, res) => {
   }
 });
 
-app.get('/api/libraries/:id', async (req, res) => {
+app.get(['/libraries/:id', '/api/libraries/:id'], async (req, res) => {
   try {
     const { id } = req.params;
     let library = null;
     if (isSupabaseConfigured()) {
       const { data, error } = await supabase.from('libraries').select('*').eq('id', id).single();
-      if (!error && data) library = { id: data.id, name: data.name, description: data.description, category: data.category, version: data.version, icon: data.icon, difficulty: data.difficulty, platforms: data.platforms || [], comingSoon: data.coming_soon };
+      if (!error && data) library = {
+        id: data.id, name: data.name, description: data.description,
+        category: data.category, version: data.version, icon: data.icon,
+        difficulty: data.difficulty, platforms: data.platforms || [],
+        comingSoon: data.coming_soon,
+      };
     }
     if (!library) library = getLibraryById(id);
     if (!library) return res.status(404).json({ success: false, message: `Library '${id}' not found` });
@@ -282,7 +302,7 @@ app.get('/api/libraries/:id', async (req, res) => {
 });
 
 // ── Commands ──
-app.post('/api/commands/generate',
+app.post(['/commands/generate', '/api/commands/generate'],
   body('libraryId').notEmpty().withMessage('Library ID is required'),
   body('deviceSpecs').isObject().withMessage('Device specs must be an object'),
   body('deviceSpecs.os').notEmpty().withMessage('OS is required'),
@@ -298,23 +318,28 @@ app.post('/api/commands/generate',
 
       const commands = generateCommands(libraryId, deviceSpecs.os);
 
-      // Save to DB
       if (isSupabaseConfigured() && sessionId) {
-        await supabase.from('generation_history').insert({ session_id: sessionId, library_id: libraryId, os: deviceSpecs.os, cpu: deviceSpecs.cpu || null, gpu: deviceSpecs.gpu || null, ram: deviceSpecs.ram || null });
+        await supabase.from('generation_history').insert({
+          session_id: sessionId, library_id: libraryId, os: deviceSpecs.os,
+          cpu: deviceSpecs.cpu || null, gpu: deviceSpecs.gpu || null, ram: deviceSpecs.ram || null,
+        });
       }
 
       res.json({
         success: true,
         data: {
           library: { id: library.id, name: library.name, version: library.version },
-          deviceSpecs: { os: deviceSpecs.os, cpu: deviceSpecs.cpu, gpu: deviceSpecs.gpu || 'Not specified', ram: deviceSpecs.ram || 'Not specified' },
+          deviceSpecs: {
+            os: deviceSpecs.os, cpu: deviceSpecs.cpu,
+            gpu: deviceSpecs.gpu || 'Not specified', ram: deviceSpecs.ram || 'Not specified',
+          },
           commands,
           projectStructure: generateProjectStructure(),
           pathSetup: [],
           exampleCode: generateExampleCode(),
           cmakeFile: '',
           generatedAt: new Date().toISOString(),
-        }
+        },
       });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
@@ -323,7 +348,7 @@ app.post('/api/commands/generate',
 );
 
 // ── AI Chat ──
-app.post('/api/ai/chat',
+app.post(['/ai/chat', '/api/ai/chat'],
   body('message').notEmpty().withMessage('Message is required'),
   async (req, res) => {
     if (!validate(req, res)) return;
@@ -331,14 +356,21 @@ app.post('/api/ai/chat',
       const { message, context, sessionId } = req.body;
       const response = await generateAIResponse(message, context || {});
 
-      // Save to DB only if relevant
       if (isSupabaseConfigured() && sessionId && !response.offTopic) {
-        await supabase.from('ai_chat_history').insert({ session_id: sessionId, library_id: context?.library?.id || null, os: context?.deviceSpecs?.os || null, user_message: message, ai_response: response.message, suggestions: response.suggestions || [] });
+        await supabase.from('ai_chat_history').insert({
+          session_id: sessionId, library_id: context?.library?.id || null,
+          os: context?.deviceSpecs?.os || null, user_message: message,
+          ai_response: response.message, suggestions: response.suggestions || [],
+        });
       }
 
       res.json({
         success: true,
-        data: { userMessage: message, aiResponse: response.message, suggestions: response.suggestions || [], offTopic: response.offTopic || false, timestamp: new Date().toISOString() }
+        data: {
+          userMessage: message, aiResponse: response.message,
+          suggestions: response.suggestions || [], offTopic: response.offTopic || false,
+          timestamp: new Date().toISOString(),
+        },
       });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
@@ -357,5 +389,4 @@ app.use((err, req, res, next) => {
   res.status(err.statusCode || 500).json({ success: false, message: err.message || 'Internal Server Error' });
 });
 
-// Vercel serverless handler
 export default app;
